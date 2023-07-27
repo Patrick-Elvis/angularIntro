@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { first } from 'rxjs/operators';
+import { forkJoin, of } from 'rxjs';
 
 import { AccountService, AlertService } from '@app/_services';
 
@@ -69,10 +70,23 @@ export class AddEditComponent implements OnInit {
     }
 
     this.submitting = true;
-    this.saveUser()
+
+    // Use forkJoin to combine getById and saveUser observables
+    const saveOrUpdate$ = this.id
+      ? this.accountService.update(this.id, this.form.value)
+      : this.accountService.register(this.form.value);
+
+    const getById$ = this.id ? this.accountService.getById(this.id) : of(null);
+    // For add mode, there's no getById call, so we create an observable with null
+
+    forkJoin({ saveOrUpdate$, getById$ })
       .pipe(first())
       .subscribe({
-        next: () => {
+        next: (results) => {
+          const updatedUser = results.getById$;
+          if (updatedUser) {
+            this.form.patchValue(updatedUser);
+          }
           this.alertService.success('User saved', true);
           this.router.navigateByUrl('/users');
         },
